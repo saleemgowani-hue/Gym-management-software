@@ -45,7 +45,10 @@ def page_trainers():
 
     with tab_add:
         editing_id = st.session_state.get("editing_trainer")
-        trainer = db.fetch_one("SELECT * FROM trainers WHERE id=?", (editing_id,)) if editing_id else None
+        trainer = db.fetch_one("SELECT * FROM trainers WHERE id=? AND gym_id=?",
+                               (editing_id, gym_id)) if editing_id else None
+        if editing_id and not trainer:
+            st.session_state["editing_trainer"] = None  # stale/foreign id - never trust it
         if trainer:
             st.info(f"Editing **{trainer['trainer_name']}**")
             if st.button("Cancel edit / add new instead", key="cancel_trainer_edit"):
@@ -78,9 +81,9 @@ def page_trainers():
             elif trainer:
                 db.execute(
                     """UPDATE trainers SET trainer_name=?, mobile=?, email=?, specialization=?,
-                           joining_date=?, salary=?, commission=?, status=? WHERE id=?""",
+                           joining_date=?, salary=?, commission=?, status=? WHERE id=? AND gym_id=?""",
                     (name.strip(), mobile, email, spec, joining.strftime("%Y-%m-%d"), salary,
-                     commission, status, trainer["id"]))
+                     commission, status, trainer["id"], gym_id))
                 st.session_state["editing_trainer"] = None
                 utils.toast_ok("Trainer updated.")
                 utils.trainer_options.clear()

@@ -61,7 +61,10 @@ def _inventory(gym_id):
 
 def _form(gym_id):
     editing_id = st.session_state.get("editing_product")
-    product = db.fetch_one("SELECT * FROM products WHERE id=?", (editing_id,)) if editing_id else None
+    product = db.fetch_one("SELECT * FROM products WHERE id=? AND gym_id=?",
+                           (editing_id, gym_id)) if editing_id else None
+    if editing_id and not product:
+        st.session_state["editing_product"] = None      # stale/foreign id - never trust it
     if product:
         st.info(f"Editing **{product['product_name']}**")
         if st.button("Cancel edit / add new instead", key="cancel_prod_edit"):
@@ -98,9 +101,10 @@ def _form(gym_id):
     if product:
         db.execute(
             """UPDATE products SET product_name=?, category=?, barcode=?, purchase_price=?,
-                   selling_price=?, stock=?, low_stock_limit=?, supplier=?, status=? WHERE id=?""",
+                   selling_price=?, stock=?, low_stock_limit=?, supplier=?, status=?
+               WHERE id=? AND gym_id=?""",
             (name.strip(), category, barcode, purchase_price, selling_price, stock,
-             low_stock_limit, supplier, status, product["id"]))
+             low_stock_limit, supplier, status, product["id"], gym_id))
         st.session_state["editing_product"] = None
         utils.toast_ok("Product updated.")
     else:

@@ -91,7 +91,11 @@ def sign_out():
     user = st.session_state.get("user")
     if user:
         db.log_action(user["gym_id"], user, "LOGOUT", "Signed out")
-    for key in ("user", "gym", "page", "profile_member"):
+    # Clear the whole session, not just user/gym - a shared/kiosk browser tab can go
+    # straight from one gym's login to a different gym's, and nothing scoped to the
+    # previous gym (edit-in-progress ids, cached licence status, filters, etc.) should
+    # survive into the next login.
+    for key in list(st.session_state.keys()):
         st.session_state.pop(key, None)
     st.session_state.auth_view = "signin"
     st.rerun()

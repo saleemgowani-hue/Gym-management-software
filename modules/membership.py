@@ -42,7 +42,10 @@ def page_plans():
 
     with tab_add:
         editing_id = st.session_state.get("editing_plan")
-        plan = db.fetch_one("SELECT * FROM membership_plans WHERE id=?", (editing_id,)) if editing_id else None
+        plan = db.fetch_one("SELECT * FROM membership_plans WHERE id=? AND gym_id=?",
+                            (editing_id, gym_id)) if editing_id else None
+        if editing_id and not plan:
+            st.session_state["editing_plan"] = None    # stale/foreign id - never trust it
         if plan:
             st.info(f"Editing **{plan['plan_name']}**")
             if st.button("Cancel edit / add new instead"):
@@ -71,8 +74,8 @@ def page_plans():
             elif plan:
                 db.execute(
                     """UPDATE membership_plans SET plan_name=?, duration_months=?, price=?,
-                           discount=?, description=?, status=? WHERE id=?""",
-                    (name.strip(), duration, price, discount, description, status, plan["id"]))
+                           discount=?, description=?, status=? WHERE id=? AND gym_id=?""",
+                    (name.strip(), duration, price, discount, description, status, plan["id"], gym_id))
                 st.session_state["editing_plan"] = None
                 utils.toast_ok("Plan updated.")
                 st.rerun()
