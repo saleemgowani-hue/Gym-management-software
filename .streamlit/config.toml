@@ -1,0 +1,13 @@
+# Forces a light theme for every Streamlit-native widget (text inputs, checkboxes,
+# selectboxes, plain buttons) regardless of the visitor's device/browser dark-mode
+# setting. Without this, Streamlit falls back to auto dark/light based on
+# prefers-color-scheme, so on a phone in dark mode inputs render with a black
+# background and default (red) button colours that clash with the app's own navy/
+# blue theme.py styling.
+[theme]
+base = "light"
+primaryColor = "#3B5BFF"
+backgroundColor = "#F4F7FC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F2A4A"
+font = "sans serif"
