@@ -1,0 +1,10 @@
+# SN Gym Management System - Python 3.9 or newer
+streamlit>=1.39
+pandas>=2.0
+plotly>=5.18
+openpyxl>=3.1
+
+# PostgreSQL driver - needed only for the cloud deployment.
+# Harmless to install locally; SQLite is used automatically when no
+# DATABASE_URL is configured.
+psycopg[binary]>=3.1
