@@ -147,13 +147,13 @@ def page_sales():
         (gym_id, member_id, invoice_no, start_date.strftime("%Y-%m-%d"), ms_id, net_amount,
          paid_amount, due_amount, payment_mode, "Paid" if due_amount <= 0 else "Partial", notes,
          st.session_state.user["id"]))
-    db.execute("UPDATE members SET status='Active' WHERE id=?", (member_id,))
+    db.execute("UPDATE members SET status='Active' WHERE id=? AND gym_id=?", (member_id, gym_id))
     db.log_action(gym_id, st.session_state.user, "MEMBERSHIP_SALE",
                  f"{member_choice} -> {plan_choice} ({invoice_no})")
     utils.toast_ok(f"Membership sold. Invoice {invoice_no}.")
 
-    sale = db.fetch_one("SELECT * FROM memberships WHERE id=?", (ms_id,))
-    member = db.fetch_one("SELECT * FROM members WHERE id=?", (member_id,))
+    sale = db.fetch_one("SELECT * FROM memberships WHERE id=? AND gym_id=?", (ms_id, gym_id))
+    member = db.fetch_one("SELECT * FROM members WHERE id=? AND gym_id=?", (member_id, gym_id))
     html = utils.receipt_html(st.session_state.gym, member, sale)
     utils.print_button(html, f"receipt_{invoice_no}", "Print / Save Receipt", key="sale_receipt")
 
@@ -240,7 +240,8 @@ def page_renewals():
                     (gym_id, int(r["member_id"]), invoice_no, start_date.strftime("%Y-%m-%d"),
                      ms_id, net_amount, paid_amount, due_amount, payment_mode,
                      "Paid" if due_amount <= 0 else "Partial", st.session_state.user["id"]))
-                db.execute("UPDATE members SET status='Active' WHERE id=?", (int(r["member_id"]),))
+                db.execute("UPDATE members SET status='Active' WHERE id=? AND gym_id=?",
+                          (int(r["member_id"]), gym_id))
                 db.log_action(gym_id, st.session_state.user, "MEMBERSHIP_RENEWED",
                              f"{r['full_name']} -> {plan_choice} ({invoice_no})")
                 utils.toast_ok(f"Membership renewed for {r['full_name']}. Invoice {invoice_no}.")

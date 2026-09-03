@@ -629,22 +629,14 @@ def log_action(gym_id, user, action, details=""):
 # Backup / restore  (file copy on SQLite, workbook export on Postgres)
 # --------------------------------------------------------------------------
 def create_backup():
-    """SQLite: a consistent .db copy. Postgres: an .xlsx workbook of every table."""
+    """SQLite only: a consistent, full .db file copy. Safe there because each install is
+    one gym's own database file on that gym's own machine. NOT used on Postgres - see
+    export_gym_backup(), which is the multi-tenant-safe, per-gym equivalent."""
+    if is_postgres():
+        raise RuntimeError("create_backup() dumps the whole shared database and must never "
+                           "be used on the multi-tenant Postgres backend. Use export_gym_backup().")
     init_db()
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    if is_postgres():
-        target = os.path.join(BACKUP_DIR, f"gym_backup_{stamp}.xlsx")
-        with pd.ExcelWriter(target, engine="openpyxl") as writer:
-            for table in TABLES:
-                try:
-                    frame = fetch_df(f"SELECT * FROM {table}")
-                except Exception:
-                    continue
-                if frame.empty:
-                    frame = pd.DataFrame({"info": ["no rows"]})
-                frame.to_excel(writer, sheet_name=table[:31], index=False)
-        return target
-
     target = os.path.join(BACKUP_DIR, f"gym_backup_{stamp}.db")
     with get_conn() as conn:
         dest = sqlite3.connect(target)
@@ -654,6 +646,11 @@ def create_backup():
 
 
 def list_backups():
+    """SQLite only. On Postgres BACKUP_DIR is local disk shared by every tenant on that
+    server, so listing it would show one gym's backups to every other gym - never call
+    this on Postgres."""
+    if is_postgres():
+        return []
     files = []
     for name in sorted(os.listdir(BACKUP_DIR), reverse=True):
         if name.endswith((".db", ".xlsx")):
@@ -665,6 +662,33 @@ def list_backups():
                 "created": datetime.fromtimestamp(os.path.getmtime(path)).strftime("%d-%b-%Y %H:%M"),
             })
     return files
+
+
+# Every gym-owned table, i.e. every table in TABLES except the two that are not scoped
+# to one gym: app_state (remember-me tokens / internal markers, shared, never exported)
+# and gyms itself (the gym's own row is matched by id, not gym_id).
+_GYM_SCOPED_TABLES = [t for t in TABLES if t not in ("app_state", "gyms")]
+
+
+def export_gym_backup(gym_id):
+    """Build an .xlsx backup containing ONLY this gym's rows, entirely in memory - nothing
+    is written to shared disk and nothing is listed for other tenants. This is the backup
+    path multi-tenant Postgres deployments must use instead of create_backup()."""
+    import io
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        gym_row = fetch_df("SELECT * FROM gyms WHERE id=?", (gym_id,))
+        (gym_row if not gym_row.empty else pd.DataFrame({"info": ["no rows"]})) \
+            .to_excel(writer, sheet_name="gyms", index=False)
+        for table in _GYM_SCOPED_TABLES:
+            try:
+                frame = fetch_df(f"SELECT * FROM {table} WHERE gym_id=?", (gym_id,))
+            except Exception:
+                continue
+            if frame.empty:
+                frame = pd.DataFrame({"info": ["no rows"]})
+            frame.to_excel(writer, sheet_name=table[:31], index=False)
+    return buffer.getvalue()
 
 
 def restore_backup(uploaded_bytes):

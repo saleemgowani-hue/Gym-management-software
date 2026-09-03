@@ -58,10 +58,12 @@ def _dues(gym_id):
                 new_due = round(pay_row["due_amount"] - collect, 2)
                 status = "Paid" if new_due <= 0 else "Partial"
                 db.execute("UPDATE payments SET paid_amount=?, due_amount=?, status=?, "
-                          "payment_mode=? WHERE id=?", (new_paid, new_due, status, mode, pay_row["id"]))
+                          "payment_mode=? WHERE id=? AND gym_id=?",
+                          (new_paid, new_due, status, mode, pay_row["id"], gym_id))
                 if pay_row.get("ref_table") in ("memberships", "personal_training") and pay_row.get("ref_id"):
                     db.execute(f"UPDATE {pay_row['ref_table']} SET paid_amount=?, due_amount=? "
-                              f"WHERE id=?", (new_paid, new_due, pay_row["ref_id"]))
+                              f"WHERE id=? AND gym_id=?",
+                              (new_paid, new_due, pay_row["ref_id"], gym_id))
                 db.log_action(gym_id, st.session_state.user, "PAYMENT_COLLECTED",
                              f"{r['Invoice']} - {utils.money(collect)}")
                 utils.toast_ok(f"Collected {utils.money(collect)} for invoice {r['Invoice']}.")

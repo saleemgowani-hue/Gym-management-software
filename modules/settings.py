@@ -3,6 +3,8 @@ SN Gym Management System - Staff, Settings & License Management
 Developed by SN Softech Solutions
 """
 
+from datetime import datetime
+
 import streamlit as st
 
 import auth
@@ -45,8 +47,8 @@ def page_staff():
                 continue
             label = "Deactivate" if r["is_active"] else "Activate"
             if c[4].button(label, key=f"staff_toggle_{r['id']}", use_container_width=True):
-                db.execute("UPDATE users SET is_active=? WHERE id=?",
-                          (0 if r["is_active"] else 1, r["id"]))
+                db.execute("UPDATE users SET is_active=? WHERE id=? AND gym_id=?",
+                          (0 if r["is_active"] else 1, r["id"], gym_id))
                 st.rerun()
 
     with tab_add:
@@ -163,6 +165,28 @@ def _account(user):
 
 def _backup(gym_id, user):
     st.markdown(f"**Active database:** {db.backend_label()}")
+
+    if db.is_postgres():
+        # A shared cloud database holds every gym's rows in the same tables, and its
+        # backup folder lives on shared server disk - a whole-database dump or a listing
+        # of "recent backups" would show every gym's data to every other gym. So on this
+        # backend we only ever offer an in-memory, gym-scoped export, downloaded straight
+        # to the browser - nothing is written to shared disk and nothing is listed.
+        st.caption("Your data lives in the shared cloud database, which your hosting "
+                  "provider backs up automatically. Use the button below any time to take "
+                  "your own copy - it contains only this gym's records.")
+        if st.button("Prepare My Gym's Backup", type="primary", use_container_width=True):
+            st.session_state["_gym_backup_bytes"] = db.export_gym_backup(gym_id)
+            db.log_action(gym_id, user, "BACKUP_CREATED", "Gym-scoped export")
+        data = st.session_state.get("_gym_backup_bytes")
+        if data:
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            st.download_button("Download My Gym's Backup", data=data,
+                               file_name=f"gym_backup_{stamp}.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               use_container_width=True)
+        return
+
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Create Database Backup", type="primary", use_container_width=True):
@@ -171,18 +195,17 @@ def _backup(gym_id, user):
             utils.toast_ok(f"Backup saved: {path}")
             st.rerun()
     with c2:
-        if not db.is_postgres():
-            uploaded = st.file_uploader("Restore from a .db backup file", type=["db"])
-            if uploaded is not None and utils.confirm("restore_confirm",
-                                                       "Yes, replace the current database"):
-                if st.button("Restore Now", type="primary"):
-                    try:
-                        safety = db.restore_backup(uploaded.getbuffer().tobytes())
-                        db.log_action(gym_id, user, "BACKUP_RESTORED", safety)
-                        utils.toast_ok("Database restored. The previous copy was saved as a safety backup.")
-                        st.rerun()
-                    except Exception as exc:
-                        utils.toast_err(f"Restore failed: {exc}")
+        uploaded = st.file_uploader("Restore from a .db backup file", type=["db"])
+        if uploaded is not None and utils.confirm("restore_confirm",
+                                                   "Yes, replace the current database"):
+            if st.button("Restore Now", type="primary"):
+                try:
+                    safety = db.restore_backup(uploaded.getbuffer().tobytes())
+                    db.log_action(gym_id, user, "BACKUP_RESTORED", safety)
+                    utils.toast_ok("Database restored. The previous copy was saved as a safety backup.")
+                    st.rerun()
+                except Exception as exc:
+                    utils.toast_err(f"Restore failed: {exc}")
 
     st.markdown("##### Recent backups")
     backups = db.list_backups()

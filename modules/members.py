@@ -147,11 +147,11 @@ def _form(gym_id, member=None):
             """UPDATE members SET full_name=?, gender=?, dob=?, mobile=?, whatsapp=?, email=?,
                    address=?, emergency_contact=?, joining_date=?, photo_path=?, blood_group=?,
                    height=?, weight=?, fitness_goal=?, medical_notes=?, trainer_id=?, status=?
-               WHERE id=?""",
+               WHERE id=? AND gym_id=?""",
             (full_name.strip(), gender, dob.strftime("%Y-%m-%d"), mobile.strip(), whatsapp,
              email.strip(), address, emergency, joining_date.strftime("%Y-%m-%d"), photo_path,
              blood_group, height, weight, fitness_goal, medical_notes, trainer_id, status,
-             member["id"]))
+             member["id"], gym_id))
         db.log_action(gym_id, st.session_state.user, "MEMBER_UPDATED", full_name)
         utils.toast_ok("Member updated.")
     else:
@@ -190,8 +190,8 @@ def _profile(gym_id, member_id):
         st.markdown(f"### {member['full_name']}  <span style='color:#64748B;font-size:.9rem'>"
                     f"{member['member_code']}</span>", unsafe_allow_html=True)
         st.write(f"\U0001F4F1 {member['mobile'] or '-'}   |   ✉️ {member['email'] or '-'}")
-        trainer = db.fetch_one("SELECT trainer_name FROM trainers WHERE id=?", (member.get("trainer_id"),)) \
-            if member.get("trainer_id") else None
+        trainer = db.fetch_one("SELECT trainer_name FROM trainers WHERE id=? AND gym_id=?",
+                               (member.get("trainer_id"), gym_id)) if member.get("trainer_id") else None
         st.write(f"Trainer: **{trainer['trainer_name'] if trainer else 'Unassigned'}**  |  "
                 f"Joined: **{utils.fmt_date(member['joining_date'])}**  |  Status: **{member['status']}**")
 
