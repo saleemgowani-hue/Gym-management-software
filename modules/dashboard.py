@@ -110,7 +110,8 @@ def page():
 
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
     st.markdown("##### Live alerts")
-    alerts = reports.build_alerts(gym_id)[:6]
+    all_alerts = reports.build_alerts(gym_id)
+    alerts = all_alerts[:6]
     if not alerts:
         utils.empty_state("All clear", "No expiring memberships, dues or low stock right now.")
     else:
@@ -120,6 +121,6 @@ def page():
                 f"<div style='padding:8px 0;border-bottom:1px solid #E3E8F0'>"
                 f"<span style='color:{colour};font-weight:700'>{a['type']}</span> - {a['message']}"
                 f"</div>", unsafe_allow_html=True)
-        if len(reports.build_alerts(gym_id)) > 6:
+        if len(all_alerts) > 6:
             st.caption("See the Notifications page for the full list.")
     st.markdown("</div>", unsafe_allow_html=True)

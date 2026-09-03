@@ -8,6 +8,8 @@ licence gate, the sidebar and page routing.
 Run with:  streamlit run app.py
 """
 
+import time
+
 import streamlit as st
 
 import auth
@@ -28,6 +30,7 @@ st.set_page_config(page_title=APP_NAME, page_icon="\U0001F3CB", layout="wide",
                                                    # collapsed on phones, open on desktop
 
 db.init_db()
+demo_setup.purge_expired_demo_data()
 theme.inject()
 
 
@@ -43,6 +46,26 @@ def _bootstrap_demo():
 
 
 _bootstrap_demo()
+
+LICENSE_CACHE_TTL = 60   # seconds - the licence almost never changes mid-session, so
+                         # re-checking (and re-writing the clock-tamper heartbeat) on
+                         # every single click was the main thing making the app feel slow
+
+
+def get_license_status(gym_id):
+    """Cached wrapper around lm.get_status() so it does not hit the database on every
+    rerun. Call invalidate_license_cache() right after activating/renewing a licence."""
+    cached = st.session_state.get("license_status_cache")
+    now = time.time()
+    if cached and cached["gym_id"] == gym_id and now - cached["ts"] < LICENSE_CACHE_TTL:
+        return cached["status"]
+    status = lm.get_status(gym_id)
+    st.session_state.license_status_cache = {"gym_id": gym_id, "status": status, "ts": now}
+    return status
+
+
+def invalidate_license_cache():
+    st.session_state.pop("license_status_cache", None)
 
 
 # --------------------------------------------------------------------------
@@ -294,6 +317,7 @@ def screen_locked(status):
     if submitted:
         ok, message = lm.activate(gym["id"], key, gym_name, mobile)
         if ok:
+            invalidate_license_cache()
             st.success(message)
             st.rerun()
         else:
@@ -319,9 +343,12 @@ def sidebar(status):
                 <span>{user['role']} &middot; @{user['username']}</span></div>""",
             unsafe_allow_html=True)
 
-        badge = "pill-live" if status["state"] == "LICENSED" else "pill-warn"
-        text = (f"LICENSED - {status['days_left']} DAYS LEFT"
-                if status["state"] == "LICENSED" else status["label"].upper())
+        if demo_setup.is_demo_gym(gym):
+            badge, text = "pill-live", "DEMO ACCOUNT"
+        else:
+            badge = "pill-live" if status["state"] == "LICENSED" else "pill-warn"
+            text = (f"LICENSED - {status['days_left']} DAYS LEFT"
+                    if status["state"] == "LICENSED" else status["label"].upper())
         st.markdown(f"<div style='margin-bottom:10px'><span class='pill {badge}'>{text}</span></div>",
                     unsafe_allow_html=True)
 
@@ -376,23 +403,27 @@ def main():
         return
 
     gym_id = st.session_state.user["gym_id"]
-    status = lm.get_status(gym_id)
+    is_demo = demo_setup.is_demo_gym(st.session_state.gym)
+    status = get_license_status(gym_id)
     st.session_state.license_status = status
 
     # Admins can always reach the licence screen; everyone else is blocked.
-    if status["locked"]:
+    # The demo account is always usable, whatever its underlying licence record says.
+    if status["locked"] and not is_demo:
         screen_locked(status)
         return
 
     sidebar(status)
 
-    if status["state"] == "LICENSED":
+    if is_demo:
+        right = '<span class="pill pill-live">DEMO ACCOUNT</span>'
+    elif status["state"] == "LICENSED":
         right = f'<span class="pill pill-live">LICENSED - {status["days_left"]} DAYS LEFT</span>'
     else:
         right = f'<span class="pill pill-warn">{status["label"]}</span>'
     brand_bar(right)
 
-    if status["state"] == "LICENSED" and status["days_left"] <= 15:
+    if not is_demo and status["state"] == "LICENSED" and status["days_left"] <= 15:
         st.warning(f"Your licence expires in {status['days_left']} day(s). Renew it to avoid a lockout.")
 
     page_key = st.session_state.page

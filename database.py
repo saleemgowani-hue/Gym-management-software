@@ -372,6 +372,7 @@ SCHEMA = [
         check_out TEXT,
         status TEXT DEFAULT 'Present',
         source TEXT DEFAULT 'Manual',
+        created_at {TS},
         UNIQUE(gym_id, member_id, att_date)
     )""",
     """CREATE TABLE IF NOT EXISTS personal_training (
@@ -396,7 +397,8 @@ SCHEMA = [
         gym_id INTEGER NOT NULL,
         pt_id INTEGER NOT NULL REFERENCES personal_training(id) ON DELETE CASCADE,
         session_date TEXT,
-        notes TEXT
+        notes TEXT,
+        created_at {TS}
     )""",
     """CREATE TABLE IF NOT EXISTS payments (
         id {ID},
@@ -438,7 +440,8 @@ SCHEMA = [
         stock DOUBLE PRECISION DEFAULT 0,
         low_stock_limit DOUBLE PRECISION DEFAULT 5,
         supplier TEXT,
-        status TEXT DEFAULT 'Active'
+        status TEXT DEFAULT 'Active',
+        created_at {TS}
     )""",
     """CREATE TABLE IF NOT EXISTS product_sales (
         id {ID},
@@ -452,7 +455,8 @@ SCHEMA = [
         paid_amount DOUBLE PRECISION DEFAULT 0,
         due_amount DOUBLE PRECISION DEFAULT 0,
         payment_mode TEXT,
-        invoice_no TEXT
+        invoice_no TEXT,
+        created_at {TS}
     )""",
     """CREATE TABLE IF NOT EXISTS stock_movements (
         id {ID},
@@ -461,14 +465,16 @@ SCHEMA = [
         move_date TEXT,
         move_type TEXT,
         quantity DOUBLE PRECISION,
-        notes TEXT
+        notes TEXT,
+        created_at {TS}
     )""",
     """CREATE TABLE IF NOT EXISTS weight_history (
         id {ID},
         gym_id INTEGER NOT NULL,
         member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
         log_date TEXT,
-        weight DOUBLE PRECISION
+        weight DOUBLE PRECISION,
+        created_at {TS}
     )""",
     """CREATE TABLE IF NOT EXISTS notifications (
         id {ID},
@@ -524,8 +530,28 @@ PAYMENT_MODES = ["Cash", "UPI", "Card", "Bank Transfer", "Other"]
 ROLES = ["Admin", "Manager", "Receptionist", "Trainer"]
 
 
+# Columns added after the original release. New installs get them straight from SCHEMA;
+# databases created before this only get them here, via a best-effort ALTER TABLE.
+_LATE_COLUMNS = {
+    "attendance": "created_at",
+    "pt_sessions": "created_at",
+    "products": "created_at",
+    "product_sales": "created_at",
+    "stock_movements": "created_at",
+    "weight_history": "created_at",
+}
+
+_INITIALIZED = False
+
+
 def init_db():
-    """Create every table on first launch. Safe to call on every start."""
+    """Create every table on first launch. Safe to call on every start - the actual
+    DDL only runs once per server process, so a rerun-happy UI like Streamlit does not
+    pay this cost on every interaction."""
+    global _INITIALIZED
+    if _INITIALIZED:
+        return True
+
     if is_postgres():
         id_col = "SERIAL PRIMARY KEY"
         ts_col = "TEXT DEFAULT to_char(now(),'YYYY-MM-DD HH24:MI:SS')"
@@ -538,18 +564,40 @@ def init_db():
             conn.raw.execute(stmt.format(ID=id_col, TS=ts_col))
         for stmt in INDEXES:
             conn.raw.execute(stmt)
+        for table, column in _LATE_COLUMNS.items():
+            try:
+                if is_postgres():
+                    conn.raw.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ts_col}")
+                else:
+                    conn.raw.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ts_col}")
+            except Exception:
+                pass                     # column already exists on an upgraded database
+
+    if not is_postgres():
+        try:
+            with get_conn() as conn:
+                # WAL + relaxed fsync: far fewer disk syncs per write, much snappier
+                # on a local desktop install without risking the database file itself.
+                conn.raw.execute("PRAGMA journal_mode=WAL")
+                conn.raw.execute("PRAGMA synchronous=NORMAL")
+        except Exception:
+            pass                         # e.g. the db file lives on a network share
+
+    _INITIALIZED = True
     return True
 
 
 def drop_all(force=False):
     """Destructive: remove every table. Only used by the test suites and by
     tools/migrate_sqlite_to_postgres.py --fresh. Requires force=True."""
+    global _INITIALIZED
     if not force:
         raise RuntimeError("drop_all() must be called with force=True")
     with get_conn() as conn:
         for table in reversed(TABLES):
             suffix = " CASCADE" if is_postgres() else ""
             conn.raw.execute(f"DROP TABLE IF EXISTS {table}{suffix}")
+    _INITIALIZED = False                # next init_db() must recreate everything
     return True
 
 

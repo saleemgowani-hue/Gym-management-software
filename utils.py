@@ -318,6 +318,7 @@ def confirm(key, label="Yes, I am sure"):
     return st.checkbox(label, key=key)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def member_options(gym_id, active_only=False):
     sql = "SELECT id, member_code, full_name, mobile FROM members WHERE gym_id=?"
     if active_only:
@@ -327,6 +328,7 @@ def member_options(gym_id, active_only=False):
             for r in rows}
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def trainer_options(gym_id):
     rows = db.fetch_all("SELECT id, trainer_name FROM trainers WHERE gym_id=? AND status='Active' "
                         "ORDER BY trainer_name", (gym_id,))

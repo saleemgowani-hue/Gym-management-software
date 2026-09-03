@@ -8,6 +8,7 @@ import streamlit as st
 import auth
 import database as db
 import demo_data
+import demo_setup
 import license_manager as lm
 import utils
 
@@ -229,6 +230,12 @@ def page_license():
     gym = st.session_state.gym
     utils.page_header("License Management", "View and renew your software licence.", "\U0001F510")
 
+    if demo_setup.is_demo_gym(gym):
+        utils.kpi_card("Status", "Demo Account", "\U0001F510", "#16A34A")
+        st.info("This is the shared public demo account, so licence activation and expiry "
+               "don't apply here. Register your own gym to try the full activation flow.")
+        return
+
     status = lm.get_status(gym_id)
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -254,6 +261,7 @@ def page_license():
         ok, message = lm.activate(gym_id, key, gym_name, mobile)
         (utils.toast_ok if ok else utils.toast_err)(message)
         if ok:
+            st.session_state.pop("license_status_cache", None)
             st.rerun()
 
     st.caption(f"To purchase or renew a licence key, contact {lm.SUPPORT_CONTACT}")

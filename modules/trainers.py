@@ -83,6 +83,7 @@ def page_trainers():
                      commission, status, trainer["id"]))
                 st.session_state["editing_trainer"] = None
                 utils.toast_ok("Trainer updated.")
+                utils.trainer_options.clear()
                 st.rerun()
             else:
                 db.execute(
@@ -91,6 +92,7 @@ def page_trainers():
                     (gym_id, name.strip(), mobile, email, spec, joining.strftime("%Y-%m-%d"),
                      salary, commission))
                 utils.toast_ok(f"Trainer {name} added.")
+                utils.trainer_options.clear()
                 st.rerun()
 
 

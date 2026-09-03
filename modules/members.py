@@ -168,6 +168,7 @@ def _form(gym_id, member=None):
                        (gym_id, member_id, date.today().strftime("%Y-%m-%d"), weight))
         db.log_action(gym_id, st.session_state.user, "MEMBER_ADDED", f"{full_name} ({code})")
         utils.toast_ok(f"Member {full_name} added with ID {code}.")
+    utils.member_options.clear()
     st.rerun()
 
 
@@ -285,6 +286,7 @@ def _profile(gym_id, member_id):
             if st.button("Delete Member", type="primary"):
                 db.execute("DELETE FROM members WHERE id=?", (member_id,))
                 db.log_action(gym_id, st.session_state.user, "MEMBER_DELETED", member["full_name"])
+                utils.member_options.clear()
                 st.session_state.profile_member = None
                 utils.toast_ok("Member deleted.")
                 st.rerun()
