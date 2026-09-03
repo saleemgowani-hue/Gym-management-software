@@ -129,24 +129,23 @@ def screen_auth():
 def form_signin():
     st.subheader("Sign in")
 
-    if demo_setup.demo_mode():
-        st.info(
-            f"**Try the live demo** — username `{demo_setup.DEMO_USER}`, password "
-            f"`{demo_setup.DEMO_PASSWORD}` (full Admin access). "
-            f"A limited receptionist login is `{demo_setup.DEMO_STAFF_USER}` / "
-            f"`{demo_setup.DEMO_STAFF_PASSWORD}`.")
-        if st.button("Sign in to the demo gym", type="primary", use_container_width=True,
-                     key="demo_login"):
-            demo_setup.ensure_demo()
-            user, _msg = auth.login(demo_setup.DEMO_USER, demo_setup.DEMO_PASSWORD)
-            if user:
-                st.session_state.user = user
-                load_gym()
-                st.rerun()
-            else:
-                st.error("The demo account could not be opened. Please try the form below.")
-        st.caption("The demo is shared and resets from time to time, so please do not "
-                   "enter real member data.")
+    st.info(
+        f"**Try the live demo** — username `{demo_setup.DEMO_USER}`, password "
+        f"`{demo_setup.DEMO_PASSWORD}` (full Admin access). "
+        f"A limited receptionist login is `{demo_setup.DEMO_STAFF_USER}` / "
+        f"`{demo_setup.DEMO_STAFF_PASSWORD}`.")
+    if st.button("Sign in to the demo gym", type="primary", use_container_width=True,
+                 key="demo_login"):
+        demo_setup.ensure_demo()
+        user, _msg = auth.login(demo_setup.DEMO_USER, demo_setup.DEMO_PASSWORD)
+        if user:
+            st.session_state.user = user
+            load_gym()
+            st.rerun()
+        else:
+            st.error("The demo account could not be opened. Please try the form below.")
+    st.caption("The demo is shared and resets from time to time, so please do not "
+               "enter real member data.")
     with st.form("signin_form"):
         identifier = st.text_input("Username or email")
         password = st.text_input("Password", type="password")
